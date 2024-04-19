@@ -45,13 +45,6 @@ void initWindow()
   cv::namedWindow(CVParams::WINDOW_NAME);
   // create Trackbar and add to a window
   cv::createTrackbar(CVParams::MODE, CVParams::WINDOW_NAME, nullptr, 4, 0);
-  
-  // cv::createTrackbar("h", CVParams::WINDOW_NAME, nullptr, 255, 0);
-  // cv::createTrackbar("s", CVParams::WINDOW_NAME, nullptr, 255, 0);
-  // cv::createTrackbar("v", CVParams::WINDOW_NAME, nullptr, 255, 0);
-  // cv::createTrackbar("h2", CVParams::WINDOW_NAME, nullptr, 255, 0);
-  // cv::createTrackbar("s2", CVParams::WINDOW_NAME, nullptr, 255, 0);
-  // cv::createTrackbar("v2", CVParams::WINDOW_NAME, nullptr, 255, 0);
 }
 
 }
