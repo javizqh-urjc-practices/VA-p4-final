@@ -116,6 +116,8 @@ private:
 
     camera_model_ = std::make_shared<image_geometry::PinholeCameraModel>();
     camera_model_->fromCameraInfo(*msg);
+    // Added
+    camera_info_ = std::move(msg);
 
     subscription_info_ = nullptr;
   }
@@ -208,6 +210,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_depth_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_pointcloud_;
   std::shared_ptr<image_geometry::PinholeCameraModel> camera_model_;
+  // Added
+  std::shared_ptr<sensor_msgs::msg::CameraInfo> camera_info_;
 };
 
 } // namespace computer_vision

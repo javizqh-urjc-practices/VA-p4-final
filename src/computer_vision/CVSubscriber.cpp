@@ -83,8 +83,45 @@ const
     cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
     break;
   case 2:
+  {
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr new_pcl (new pcl::PointCloud<pcl::PointXYZRGB>);
+    // Fill in the cloud data
+    new_pcl->width = in_image_depth.cols;
+    new_pcl->height = in_image_depth.rows;
+    new_pcl->is_dense = true;
+    new_pcl->points.resize(new_pcl->width * new_pcl->height);
+
+    float cx, cy, fx, fy;//principal point and focal lengths
+    cx = camera_info_->k[2];
+    cy = camera_info_->k[5];
+    fx = camera_info_->k[0]; 
+    fy = camera_info_->k[4]; 
+
+    int depth_idx = 0;
+    pcl::PointCloud<pcl::PointXYZRGB>::iterator pt_iter = new_pcl->begin ();
+    for (int v = 0; v < (int)new_pcl->height; ++v) {
+      for (int u = 0; u < (int)new_pcl->width; ++u, ++depth_idx, ++pt_iter) {
+        pcl::PointXYZRGB& pt = *pt_iter;
+        float Z = in_image_depth.at<float>(v, u);
+        // Check for invalid measurements
+        if (std::isnan (Z)) {
+          pt.x = pt.y = pt.z = Z;
+        } else {
+          pt.x = ((u - cx) * Z) / fx;
+          pt.y = ((v - cy) * Z) / fy;
+          pt.z = Z;
+          pt.r = in_image_rgb.at<cv::Vec3b>(v,u)[2];
+          pt.g = in_image_rgb.at<cv::Vec3b>(v,u)[1];
+          pt.b = in_image_rgb.at<cv::Vec3b>(v,u)[0];
+          // std::cout << rgb_image.at<cv::Vec3b>(i,j)[0] << std::endl;
+        }
+      }
+    }
+
+    out_pointcloud = *new_pcl;
     cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
     break;
+  }
   case 3:
     cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
     break;
