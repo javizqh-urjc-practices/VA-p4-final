@@ -16,6 +16,40 @@
 
 #include "computer_vision/CVSubscriber.hpp"
 
+namespace CVParams {
+
+inline bool running = false;
+
+inline std::string WINDOW_NAME = "Practica_Grupo_5";
+inline std::string MODE = "Option [0-4]";
+
+float PI = 3.14159265;
+}
+
+// -------- Self-Made Functions ----------------------------------------------
+namespace CVFunctions {
+
+// -------- Window Management Functions ----------------------------------------------
+void initWindow()
+{
+  if (CVParams::running) return;
+  CVParams::running = true;
+
+  // Show images in a different windows
+  cv::namedWindow(CVParams::WINDOW_NAME);
+  // create Trackbar and add to a window
+  cv::createTrackbar(CVParams::MODE, CVParams::WINDOW_NAME, nullptr, 4, 0);
+  
+  // cv::createTrackbar("h", CVParams::WINDOW_NAME, nullptr, 255, 0);
+  // cv::createTrackbar("s", CVParams::WINDOW_NAME, nullptr, 255, 0);
+  // cv::createTrackbar("v", CVParams::WINDOW_NAME, nullptr, 255, 0);
+  // cv::createTrackbar("h2", CVParams::WINDOW_NAME, nullptr, 255, 0);
+  // cv::createTrackbar("s2", CVParams::WINDOW_NAME, nullptr, 255, 0);
+  // cv::createTrackbar("v2", CVParams::WINDOW_NAME, nullptr, 255, 0);
+}
+
+}
+
 namespace computer_vision
 {
 
@@ -38,9 +72,32 @@ const
   out_image_depth = in_image_depth;
   out_pointcloud = in_pointcloud;
 
-  // Show images in a different windows
-  cv::imshow("out_image_rgb", out_image_rgb);
-  cv::imshow("out_image_depth", out_image_depth);
+  // First time execution
+  CVFunctions::initWindow();
+
+  // Obtaining Parameter
+  int mode_param = cv::getTrackbarPos(CVParams::MODE, CVParams::WINDOW_NAME);
+
+  switch (mode_param)
+  {
+  case 1:
+    cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
+    break;
+  case 2:
+    cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
+    break;
+  case 3:
+    cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
+    break;
+  case 4:
+    cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
+    break;  
+  default:
+    // Show unprocessed image and point cloud
+    cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
+    break;
+  }
+
   cv::waitKey(3);
 
   return CVGroup(out_image_rgb, out_image_depth, out_pointcloud);
