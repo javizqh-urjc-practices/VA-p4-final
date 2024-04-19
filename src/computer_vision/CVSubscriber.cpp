@@ -14,13 +14,19 @@
  limitations under the License.
 */
 
+/*
+Grupo 5: Javier Izquierdo y Sebastián Mayorquín
+Partes implementadas:
+- Opciones 1, 2 y 4
+*/
+
 #include "computer_vision/CVSubscriber.hpp"
 
 namespace CVParams {
 
 inline bool running = false;
 
-inline std::string WINDOW_NAME = "Practica_Grupo_5";
+inline std::string WINDOW_NAME = "Practica Grupo 5";
 inline std::string MODE = "Option [0-4]";
 
 float PI = 3.14159265;
