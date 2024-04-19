@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(computer_vision)
+project(practicafinal-grupo5)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -48,7 +48,7 @@ set(dependencies
 # OpenCV and PCL node
 include_directories(include)
 add_library(${PROJECT_NAME} SHARED
-  src/${PROJECT_NAME}/CVSubscriber.cpp
+  src/computer_vision/CVSubscriber.cpp
 )
 ament_target_dependencies(${PROJECT_NAME} ${dependencies})
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${PCL_LIBRARIES})

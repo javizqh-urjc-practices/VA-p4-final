@@ -20,7 +20,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         Node(
-            package='computer_vision',
+            package='practicafinal-grupo5',
             namespace='computer_vision',
             executable='cv_program',
             output='both',
