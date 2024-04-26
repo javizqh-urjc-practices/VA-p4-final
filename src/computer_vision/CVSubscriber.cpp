@@ -27,6 +27,12 @@ Partes implementadas:
 #include <opencv2/imgproc.hpp>
 #include <opencv2/ml.hpp>
 
+#include <sys/time.h>
+
+#include <chrono>
+#include <ctime>
+#include <stdio.h>
+
 
 namespace CVParams {
 
@@ -36,17 +42,23 @@ inline std::string WINDOW_NAME = "Practica Grupo 5";
 inline std::string MODE = "Option [0-4]";
 inline std::string K = "K [1-5]";
 
+inline bool is_depth_in_meters = false;
+
+struct timeval last_time {};
+
 cv::Ptr<cv::ml::KNearest> knn;
 
 cv::Scalar lower_hsv(100, 30, 210);
 cv::Scalar upper_hsv(130, 250, 255);
+
+cv::Mat old_3_gray;
+std::vector<cv::Point2f> points_3_old;
 
 float PI = 3.14159265;
 }
 
 // -------- Self-Made Functions ----------------------------------------------
 namespace CVFunctions {
-
 
 cv::Mat preprocess(cv::Mat &image) {
 
@@ -87,7 +99,7 @@ std::vector<float> get_radius(cv::Mat& data, cv::Mat &labels, int K, cv::Mat cen
     return radius;
 }
 // -------- Window Management Functions ----------------------------------------------
-void initWindow()
+void initWindow(cv::Mat in_image_rgb)
 {
   if (CVParams::running) return;
   CVParams::running = true;
@@ -97,6 +109,10 @@ void initWindow()
   // create Trackbar and add to a window
   cv::createTrackbar(CVParams::MODE, CVParams::WINDOW_NAME, nullptr, 4, 0);
   cv::createTrackbar(CVParams::K, CVParams::WINDOW_NAME, nullptr, 4, 0);
+  gettimeofday(&CVParams::last_time, nullptr);
+  // Take first frame and find corners in it
+  cv::cvtColor(in_image_rgb, CVParams::old_3_gray, cv::COLOR_BGR2GRAY);
+  cv::goodFeaturesToTrack(CVParams::old_3_gray, CVParams::points_3_old, 100, 0.3, 7, cv::Mat(), 7, false, 0.04);
 }
 }
 
@@ -112,6 +128,7 @@ CVGroup CVSubscriber::processing(
   const pcl::PointCloud<pcl::PointXYZRGB> in_pointcloud)
 const
 {
+
   // Create output images
   cv::Mat out_image_rgb, out_image_depth;
   // Create output pointcloud
@@ -123,7 +140,8 @@ const
   out_pointcloud = in_pointcloud;
 
   // First time execution
-  CVFunctions::initWindow();
+  CVFunctions::initWindow(in_image_rgb);
+  if (in_image_depth.type() == CV_32F) CVParams::is_depth_in_meters = true;
 
   cv::Mat image, filtered_image;
   std::vector<cv::Point2f> points;
@@ -268,9 +286,104 @@ const
     break;
   }
   case 3:
+  {
+    // Create some random colors
+    std::vector<cv::Scalar> colors;
+    for (int i = 0; i < 100; i++) {
+      int r = 255;
+      int g = 0;
+      int b = 0;
+      colors.push_back(cv::Scalar(b, g, r));
+    }
+
+    std::vector<cv::Point2f> p1;
+
+    cv::Mat frame_gray;
+    cv::cvtColor(in_image_rgb, frame_gray, cv::COLOR_BGR2GRAY);
+
+    // calculate optical flow
+    std::vector<uchar> status;
+    std::vector<float> err;
+    cv::TermCriteria criteria;
+    try {
+      criteria = cv::TermCriteria((cv::TermCriteria::COUNT) +(cv::TermCriteria::EPS), 10, 0.03);
+      cv::calcOpticalFlowPyrLK(CVParams::old_3_gray, frame_gray, CVParams::points_3_old, p1, status, err, cv::Size(15, 15), 2, criteria);
+    } catch(const std::exception& e){
+      std::cerr << e.what() << '\n';
+      break;
+    }
+    
+
+    std::vector<cv::Point2f> good_new;
+    float aprox_speed_x = 0;
+    float aprox_speed_y = 0;
+    float aprox_speed_z = 0;
+    int n_points = 0;
+    float X_old, Y_old, Z_old;
+    float X, Y, Z;
+    for (uint i = 0; i < CVParams::points_3_old.size(); i++) {
+      // Select good points
+      if (status[i] == 1) {
+        good_new.push_back(p1[i]);
+        // draw the tracks
+        cv::line(out_image_rgb, p1[i], CVParams::points_3_old[i], colors[i], 2);
+        Z = in_image_depth.at<float>(p1[i].y, p1[i].x);
+        if (std::isinf(Z) || std::isnan(Z)) {
+          continue;
+        } else {
+          if (!CVParams::is_depth_in_meters) {
+            Z /= 1000;
+          }
+          X = ((float(p1[i].x) - cx) * Z) / fx;
+          Y = ((float(p1[i].y) - cy) * Z) / fy;
+        }
+        Z_old = in_image_depth.at<float>(CVParams::points_3_old[i].y, CVParams::points_3_old[i].x);
+        if (std::isinf(Z_old) || std::isnan(Z_old)) {
+          continue;
+        } else {
+          if (!CVParams::is_depth_in_meters) {
+            Z_old /= 1000;
+          }
+          X_old = ((float(CVParams::points_3_old[i].x) - cx) * Z_old) / fx;
+          Y_old = ((float(CVParams::points_3_old[i].y) - cy) * Z_old) / fy;
+        }
+        
+        aprox_speed_x += X - X_old;
+        aprox_speed_y += Y - Y_old;
+        aprox_speed_z += Z - Z_old;
+        n_points++;
+
+      }
+    }
+
+    aprox_speed_x /= n_points;
+    aprox_speed_y /= n_points;
+    aprox_speed_z /= n_points;
+    
+    struct timeval time_now {};
+    gettimeofday(&time_now, nullptr);
+    time_t msecs_time_now = (time_now.tv_sec * 1000) + (time_now.tv_usec / 1000);
+    time_t msecs_time_old = (CVParams::last_time.tv_sec * 1000) + (CVParams::last_time.tv_usec / 1000);
+    std::cout << float(msecs_time_now - msecs_time_old)/1000 << std::endl;
+    aprox_speed_x = aprox_speed_x / (float(msecs_time_now - msecs_time_old) / 1000);
+    aprox_speed_y = aprox_speed_y / (float(msecs_time_now - msecs_time_old) / 1000);
+    aprox_speed_z = aprox_speed_z / (float(msecs_time_now - msecs_time_old) / 1000);
+    float speed_mod = std::sqrt(aprox_speed_x*aprox_speed_x+aprox_speed_y*aprox_speed_y+aprox_speed_z*aprox_speed_z);
+    printf("[%.2f, %.2f, %.2f] Speed Mod: %.2f\n", aprox_speed_x, aprox_speed_y, aprox_speed_z, speed_mod);
+
+    // Now update the previous frame, previous points and time
+    gettimeofday(&CVParams::last_time, nullptr);
+    CVParams::old_3_gray = frame_gray.clone();
+    CVParams::points_3_old = good_new;
+    // Take first frame and find corners in it only if moved
+    if (speed_mod > 1) {
+      cv::cvtColor(in_image_rgb, CVParams::old_3_gray, cv::COLOR_BGR2GRAY);
+      cv::goodFeaturesToTrack(CVParams::old_3_gray, CVParams::points_3_old, 100, 0.3, 7, cv::Mat(), 7, false, 0.04);
+    }
+
     cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
     break;
-  
+  }
   case 4:
 
     filtered_image = CVFunctions::preprocess(out_image_rgb);
