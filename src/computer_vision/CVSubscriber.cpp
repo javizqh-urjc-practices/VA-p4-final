@@ -334,12 +334,11 @@ const
           Y_old = ((float(CVParams::points_3_old[i].y) - cy) * Z) / fy;
         }
         
-        if (std::abs(X - X_old) > 1000 || std::abs(Y - Y_old) > 1000) {
-          continue;
+        if (std::abs(X - X_old) < 1000 && std::abs(Y - Y_old) < 1000 && (std::abs(X - X_old) > 0.01 || std::abs(Y - Y_old) > 0.01)) {
+          aprox_speed_x += X - X_old;
+          aprox_speed_y += Y - Y_old;
+          n_points++;
         }
-        aprox_speed_x += X - X_old;
-        aprox_speed_y += Y - Y_old;
-        n_points++;
 
       }
     }
@@ -388,6 +387,12 @@ const
     cv::rectangle(new_image, cv::Point(0,0), cv::Point(155,55), cv::Scalar(255,255,255), -1);
     cv::rectangle(new_image, cv::Point(0,0), cv::Point(155,55), cv::Scalar(0,0,0), 1);
 
+    if (n_points == 0) {
+      speed_mod = 0;
+      aprox_speed_x = 0;
+      aprox_speed_y = 0;
+    }
+
     std::string text = "Total speed: " + fmt::format("{:.2f}", speed_mod);
     cv::putText(new_image, text, cv::Point(10,15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
     text = " ~ X: " + fmt::format("{:.2f}", aprox_speed_x);
@@ -402,7 +407,7 @@ const
     CVParams::points_3_old = good_new;
 
     // Take first frame and find corners in it only if moved
-    if (std::abs(aprox_speed_x) > 0.4 || std::abs(aprox_speed_y) > 0.4) {
+    if (std::abs(aprox_speed_x) > 0.3 || std::abs(aprox_speed_y) > 0.3) {
       cv::cvtColor(in_image_rgb, CVParams::old_3_gray, cv::COLOR_BGR2GRAY);
       cv::goodFeaturesToTrack(CVParams::old_3_gray, CVParams::points_3_old, 100, 0.3, 7, cv::Mat(), 7, false, 0.04);
     }
