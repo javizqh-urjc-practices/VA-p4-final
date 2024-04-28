@@ -356,6 +356,12 @@ const
 
     float speed_mod = std::sqrt(aprox_speed_x*aprox_speed_x+aprox_speed_y*aprox_speed_y);
 
+    if (n_points == 0) {
+      speed_mod = 0;
+      aprox_speed_x = 0;
+      aprox_speed_y = 0;
+    }
+
     // TODO: clean this mess
     cv::Point2f center = cv::Point2f(in_image_rgb.cols/2,in_image_rgb.rows/2);
     if (aprox_speed_x > 0.4) {
@@ -382,16 +388,11 @@ const
       }
     }
 
-    printf("[%.2f, %.2f] Speed Mod: %.2f\n", aprox_speed_x, aprox_speed_y, speed_mod);
 
     cv::rectangle(new_image, cv::Point(0,0), cv::Point(155,55), cv::Scalar(255,255,255), -1);
     cv::rectangle(new_image, cv::Point(0,0), cv::Point(155,55), cv::Scalar(0,0,0), 1);
 
-    if (n_points == 0) {
-      speed_mod = 0;
-      aprox_speed_x = 0;
-      aprox_speed_y = 0;
-    }
+    printf("[%.2f, %.2f] Speed Mod: %.2f\n", aprox_speed_x, aprox_speed_y, speed_mod);
 
     std::string text = "Total speed: " + fmt::format("{:.2f}", speed_mod);
     cv::putText(new_image, text, cv::Point(10,15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
