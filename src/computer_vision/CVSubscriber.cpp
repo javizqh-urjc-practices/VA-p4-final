@@ -287,14 +287,8 @@ const
   }
   case 3:
   {
-    // Create some random colors
-    std::vector<cv::Scalar> colors;
-    for (int i = 0; i < 100; i++) {
-      int r = 255;
-      int g = 0;
-      int b = 0;
-      colors.push_back(cv::Scalar(b, g, r));
-    }
+    cv::Mat new_image(in_image_rgb.rows, in_image_rgb.cols, in_image_rgb.type());
+    new_image = in_image_rgb.clone();
 
     std::vector<cv::Point2f> p1;
 
@@ -317,16 +311,15 @@ const
     std::vector<cv::Point2f> good_new;
     float aprox_speed_x = 0;
     float aprox_speed_y = 0;
-    float aprox_speed_z = 0;
     int n_points = 0;
-    float X_old, Y_old, Z_old;
+    float X_old, Y_old;
     float X, Y, Z;
     for (uint i = 0; i < CVParams::points_3_old.size(); i++) {
       // Select good points
       if (status[i] == 1) {
         good_new.push_back(p1[i]);
         // draw the tracks
-        cv::line(out_image_rgb, p1[i], CVParams::points_3_old[i], colors[i], 2);
+        cv::line(new_image, p1[i], CVParams::points_3_old[i], cv::Scalar(0,0,255), 2);
         Z = in_image_depth.at<float>(p1[i].y, p1[i].x);
         if (std::isinf(Z) || std::isnan(Z)) {
           continue;
@@ -336,21 +329,12 @@ const
           }
           X = ((float(p1[i].x) - cx) * Z) / fx;
           Y = ((float(p1[i].y) - cy) * Z) / fy;
-        }
-        Z_old = in_image_depth.at<float>(CVParams::points_3_old[i].y, CVParams::points_3_old[i].x);
-        if (std::isinf(Z_old) || std::isnan(Z_old)) {
-          continue;
-        } else {
-          if (!CVParams::is_depth_in_meters) {
-            Z_old /= 1000;
-          }
-          X_old = ((float(CVParams::points_3_old[i].x) - cx) * Z_old) / fx;
-          Y_old = ((float(CVParams::points_3_old[i].y) - cy) * Z_old) / fy;
+          X_old = ((float(CVParams::points_3_old[i].x) - cx) * Z) / fx;
+          Y_old = ((float(CVParams::points_3_old[i].y) - cy) * Z) / fy;
         }
         
         aprox_speed_x += X - X_old;
         aprox_speed_y += Y - Y_old;
-        aprox_speed_z += Z - Z_old;
         n_points++;
 
       }
@@ -358,30 +342,58 @@ const
 
     aprox_speed_x /= n_points;
     aprox_speed_y /= n_points;
-    aprox_speed_z /= n_points;
     
     struct timeval time_now {};
     gettimeofday(&time_now, nullptr);
     time_t msecs_time_now = (time_now.tv_sec * 1000) + (time_now.tv_usec / 1000);
     time_t msecs_time_old = (CVParams::last_time.tv_sec * 1000) + (CVParams::last_time.tv_usec / 1000);
-    std::cout << float(msecs_time_now - msecs_time_old)/1000 << std::endl;
+
     aprox_speed_x = aprox_speed_x / (float(msecs_time_now - msecs_time_old) / 1000);
     aprox_speed_y = aprox_speed_y / (float(msecs_time_now - msecs_time_old) / 1000);
-    aprox_speed_z = aprox_speed_z / (float(msecs_time_now - msecs_time_old) / 1000);
-    float speed_mod = std::sqrt(aprox_speed_x*aprox_speed_x+aprox_speed_y*aprox_speed_y+aprox_speed_z*aprox_speed_z);
-    printf("[%.2f, %.2f, %.2f] Speed Mod: %.2f\n", aprox_speed_x, aprox_speed_y, aprox_speed_z, speed_mod);
+
+    float speed_mod = std::sqrt(aprox_speed_x*aprox_speed_x+aprox_speed_y*aprox_speed_y);
+
+    cv::Point2f center = cv::Point2f(in_image_rgb.cols/2,in_image_rgb.rows/2);
+    if (aprox_speed_x > 0.4) {
+      if (aprox_speed_y > 0.4) {
+        cv::arrowedLine(new_image, center, cv::Point(center.x - 150, center.y - 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
+      } else if (aprox_speed_y < -0.4) {
+        cv::arrowedLine(new_image, center, cv::Point(center.x - 150, center.y + 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
+      } else {
+        cv::arrowedLine(new_image, center, cv::Point(center.x - 150, center.y), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
+      }
+    } else if (aprox_speed_x < -0.4) {
+      if (aprox_speed_y > 0.4) {
+        cv::arrowedLine(new_image, center, cv::Point(center.x + 150, center.y - 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
+      } else if (aprox_speed_y < -0.4) {
+        cv::arrowedLine(new_image, center, cv::Point(center.x + 150, center.y + 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
+      } else {
+        cv::arrowedLine(new_image, center, cv::Point(center.x + 150, center.y), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
+      };
+    } else {
+      if (aprox_speed_y > 0.4) {
+        cv::arrowedLine(new_image, center, cv::Point(center.x, center.y - 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
+      } else if (aprox_speed_y < -0.4) {
+        cv::arrowedLine(new_image, center, cv::Point(center.x, center.y + 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
+      }
+    }
+
+    printf("[%.2f, %.2f] Speed Mod: %.2f\n", aprox_speed_x, aprox_speed_y, speed_mod);
 
     // Now update the previous frame, previous points and time
     gettimeofday(&CVParams::last_time, nullptr);
     CVParams::old_3_gray = frame_gray.clone();
     CVParams::points_3_old = good_new;
     // Take first frame and find corners in it only if moved
-    if (speed_mod > 1) {
+    if (std::abs(aprox_speed_x) > 0.4 || std::abs(aprox_speed_y) > 0.4) {
       cv::cvtColor(in_image_rgb, CVParams::old_3_gray, cv::COLOR_BGR2GRAY);
       cv::goodFeaturesToTrack(CVParams::old_3_gray, CVParams::points_3_old, 100, 0.3, 7, cv::Mat(), 7, false, 0.04);
     }
 
-    cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
+    std::string text = "[" + std::to_string(aprox_speed_x) + ", " + std::to_string(aprox_speed_y) + "]";
+    cv::putText(new_image, text, cv::Point(10,20), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255));
+
+    cv::imshow(CVParams::WINDOW_NAME, new_image);
     break;
   }
   case 4:
