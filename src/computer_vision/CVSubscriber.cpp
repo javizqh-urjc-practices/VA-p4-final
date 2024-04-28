@@ -334,6 +334,9 @@ const
           Y_old = ((float(CVParams::points_3_old[i].y) - cy) * Z) / fy;
         }
         
+        if (std::abs(X - X_old) > 1000 || std::abs(Y - Y_old) > 1000) {
+          continue;
+        }
         aprox_speed_x += X - X_old;
         aprox_speed_y += Y - Y_old;
         n_points++;
