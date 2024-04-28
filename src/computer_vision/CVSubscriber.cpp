@@ -32,6 +32,7 @@ Partes implementadas:
 #include <chrono>
 #include <ctime>
 #include <stdio.h>
+#include <fmt/format.h>
 
 
 namespace CVParams {
@@ -353,6 +354,7 @@ const
 
     float speed_mod = std::sqrt(aprox_speed_x*aprox_speed_x+aprox_speed_y*aprox_speed_y);
 
+    // TODO: clean this mess
     cv::Point2f center = cv::Point2f(in_image_rgb.cols/2,in_image_rgb.rows/2);
     if (aprox_speed_x > 0.4) {
       if (aprox_speed_y > 0.4) {
@@ -380,18 +382,27 @@ const
 
     printf("[%.2f, %.2f] Speed Mod: %.2f\n", aprox_speed_x, aprox_speed_y, speed_mod);
 
+    cv::rectangle(new_image, cv::Point(0,0), cv::Point(155,55), cv::Scalar(255,255,255), -1);
+    cv::rectangle(new_image, cv::Point(0,0), cv::Point(155,55), cv::Scalar(0,0,0), 1);
+
+    std::string text = "Total speed: " + fmt::format("{:.2f}", speed_mod);
+    cv::putText(new_image, text, cv::Point(10,15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+    text = " ~ X: " + fmt::format("{:.2f}", aprox_speed_x);
+    cv::putText(new_image, text, cv::Point(10,35), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+    text = " ~ Y: " + fmt::format("{:.2f}", aprox_speed_y);
+    cv::putText(new_image, text, cv::Point(10,50), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+
+
     // Now update the previous frame, previous points and time
     gettimeofday(&CVParams::last_time, nullptr);
     CVParams::old_3_gray = frame_gray.clone();
     CVParams::points_3_old = good_new;
+
     // Take first frame and find corners in it only if moved
     if (std::abs(aprox_speed_x) > 0.4 || std::abs(aprox_speed_y) > 0.4) {
       cv::cvtColor(in_image_rgb, CVParams::old_3_gray, cv::COLOR_BGR2GRAY);
       cv::goodFeaturesToTrack(CVParams::old_3_gray, CVParams::points_3_old, 100, 0.3, 7, cv::Mat(), 7, false, 0.04);
     }
-
-    std::string text = "[" + std::to_string(aprox_speed_x) + ", " + std::to_string(aprox_speed_y) + "]";
-    cv::putText(new_image, text, cv::Point(10,20), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255));
 
     cv::imshow(CVParams::WINDOW_NAME, new_image);
     break;
