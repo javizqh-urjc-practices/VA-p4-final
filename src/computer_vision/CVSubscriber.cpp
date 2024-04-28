@@ -335,6 +335,7 @@ const
         }
         
         if (std::abs(X - X_old) < 1000 && std::abs(Y - Y_old) < 1000 && (std::abs(X - X_old) > 0.01 || std::abs(Y - Y_old) > 0.01)) {
+          // TODO: change this to a vector ordered by distance
           aprox_speed_x += X - X_old;
           aprox_speed_y += Y - Y_old;
           n_points++;
@@ -343,6 +344,7 @@ const
       }
     }
 
+    // TODO: change this to only be of the ones in the middle
     aprox_speed_x /= n_points;
     aprox_speed_y /= n_points;
     
