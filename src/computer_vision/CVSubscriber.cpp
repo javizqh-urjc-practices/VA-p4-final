@@ -17,7 +17,7 @@
 /*
 Grupo 5: Javier Izquierdo y Sebastián Mayorquín
 Partes implementadas:
-- Opciones 1, 2 y 4
+- Opciones 1, 2, 3 y 4
 */
 
 #include "computer_vision/CVSubscriber.hpp"
@@ -42,6 +42,7 @@ inline bool running = false;
 inline std::string WINDOW_NAME = "Practica Grupo 5";
 inline std::string MODE = "Option [0-4]";
 inline std::string K = "K [1-5]";
+inline std::string EX3MODES = "Ex 3 Modes [0-3]";
 
 inline bool is_depth_in_meters = false;
 
@@ -54,6 +55,18 @@ cv::Scalar upper_hsv(130, 250, 255);
 
 cv::Mat old_3_gray;
 std::vector<cv::Point2f> points_3_old;
+
+std::vector<cv::Point3f> points_3_recorded;
+float distance_traveled = 0.0;
+
+// Camera 2 Base parameters --------------------------------
+geometry_msgs::msg::TransformStamped camera2base;
+
+double rotx;
+double roty;
+double rotz;
+double rotw;
+// ---------------------------------------------------------
 
 float PI = 3.14159265;
 }
@@ -110,6 +123,7 @@ void initWindow(cv::Mat in_image_rgb)
   // create Trackbar and add to a window
   cv::createTrackbar(CVParams::MODE, CVParams::WINDOW_NAME, nullptr, 4, 0);
   cv::createTrackbar(CVParams::K, CVParams::WINDOW_NAME, nullptr, 4, 0);
+  cv::createTrackbar(CVParams::EX3MODES, CVParams::WINDOW_NAME, nullptr, 3, 0);
   gettimeofday(&CVParams::last_time, nullptr);
   // Take first frame and find corners in it
   cv::cvtColor(in_image_rgb, CVParams::old_3_gray, cv::COLOR_BGR2GRAY);
@@ -152,6 +166,7 @@ const
 
   int mode_param = cv::getTrackbarPos(CVParams::MODE, CVParams::WINDOW_NAME);
   int K = cv::getTrackbarPos(CVParams::K, CVParams::WINDOW_NAME) + 1;
+  int mode_ex3 = cv::getTrackbarPos(CVParams::EX3MODES, CVParams::WINDOW_NAME);
 
   // Camera Intrinsic parameters
   float cx, cy, fx, fy;
@@ -307,9 +322,9 @@ const
       std::cerr << e.what() << '\n';
       break;
     }
-    
 
     std::vector<cv::Point2f> good_new;
+    std::vector<cv::Point3f> points_distances;
     float aprox_speed_x = 0;
     float aprox_speed_y = 0;
     int n_points = 0;
@@ -320,7 +335,9 @@ const
       if (status[i] == 1) {
         good_new.push_back(p1[i]);
         // draw the tracks
-        cv::line(new_image, p1[i], CVParams::points_3_old[i], cv::Scalar(0,0,255), 2);
+        if (mode_ex3 == 2) {
+          cv::line(new_image, p1[i], CVParams::points_3_old[i], cv::Scalar(0,0,255), 2);
+        }
         Z = in_image_depth.at<float>(p1[i].y, p1[i].x);
         if (std::isinf(Z) || std::isnan(Z)) {
           continue;
@@ -335,26 +352,41 @@ const
         }
         
         if (std::abs(X - X_old) < 1000 && std::abs(Y - Y_old) < 1000 && (std::abs(X - X_old) > 0.01 || std::abs(Y - Y_old) > 0.01)) {
-          // TODO: change this to a vector ordered by distance
-          aprox_speed_x += X - X_old;
-          aprox_speed_y += Y - Y_old;
-          n_points++;
+          points_distances.insert(points_distances.begin(), cv::Point3f(X - X_old, Y - Y_old, std::sqrt((X - X_old)*(X - X_old)+(Y - Y_old)*(Y - Y_old))));
         }
 
       }
     }
 
-    // TODO: change this to only be of the ones in the middle
-    aprox_speed_x /= n_points;
-    aprox_speed_y /= n_points;
+    std::sort(points_distances.begin(), points_distances.end(), [](cv::Point3f a, cv::Point3f b) 
+                                                                  {
+                                                                    return a.z < b.z;
+                                                                  });
+
+    float dist_in_iteration = 0.0;
+
+    if (points_distances.size() > 4) {
+      for (int i = points_distances.size()/4; i < 3*points_distances.size()/4; i++) {
+        aprox_speed_x += points_distances[i].x;
+        aprox_speed_y += points_distances[i].y;
+        dist_in_iteration += points_distances[i].z;
+        n_points++;
+      }
+      aprox_speed_x /= n_points;
+      aprox_speed_y /= n_points;
+      dist_in_iteration /= n_points;
+    }
+
+    CVParams::distance_traveled += dist_in_iteration;
     
     struct timeval time_now {};
     gettimeofday(&time_now, nullptr);
     time_t msecs_time_now = (time_now.tv_sec * 1000) + (time_now.tv_usec / 1000);
     time_t msecs_time_old = (CVParams::last_time.tv_sec * 1000) + (CVParams::last_time.tv_usec / 1000);
+    float seconds = (float(msecs_time_now - msecs_time_old) / 1000);
 
-    aprox_speed_x = aprox_speed_x / (float(msecs_time_now - msecs_time_old) / 1000);
-    aprox_speed_y = aprox_speed_y / (float(msecs_time_now - msecs_time_old) / 1000);
+    aprox_speed_x = aprox_speed_x / seconds;
+    aprox_speed_y = aprox_speed_y / seconds;
 
     float speed_mod = std::sqrt(aprox_speed_x*aprox_speed_x+aprox_speed_y*aprox_speed_y);
 
@@ -364,28 +396,37 @@ const
       aprox_speed_y = 0;
     }
 
+    if (mode_ex3 == 0) {
+      CVParams::points_3_recorded.clear();
+    } else if (n_points != 0){
+      CVParams::points_3_recorded.push_back(cv::Point3f(aprox_speed_x*seconds, aprox_speed_y*seconds, speed_mod));
+    }
+
+    float thresh_x = 0.3;
+    float thresh_y = 0.3;
+
     // TODO: clean this mess
     cv::Point2f center = cv::Point2f(in_image_rgb.cols/2,in_image_rgb.rows/2);
-    if (aprox_speed_x > 0.4) {
-      if (aprox_speed_y > 0.4) {
+    if (aprox_speed_x > thresh_x) {
+      if (aprox_speed_y > thresh_y) {
         cv::arrowedLine(new_image, center, cv::Point(center.x - 150, center.y - 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
-      } else if (aprox_speed_y < -0.4) {
+      } else if (aprox_speed_y < -thresh_y) {
         cv::arrowedLine(new_image, center, cv::Point(center.x - 150, center.y + 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
       } else {
         cv::arrowedLine(new_image, center, cv::Point(center.x - 150, center.y), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
       }
-    } else if (aprox_speed_x < -0.4) {
-      if (aprox_speed_y > 0.4) {
+    } else if (aprox_speed_x < -thresh_x) {
+      if (aprox_speed_y > thresh_y) {
         cv::arrowedLine(new_image, center, cv::Point(center.x + 150, center.y - 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
-      } else if (aprox_speed_y < -0.4) {
+      } else if (aprox_speed_y < -thresh_y) {
         cv::arrowedLine(new_image, center, cv::Point(center.x + 150, center.y + 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
       } else {
         cv::arrowedLine(new_image, center, cv::Point(center.x + 150, center.y), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
       };
     } else {
-      if (aprox_speed_y > 0.4) {
+      if (aprox_speed_y > thresh_y) {
         cv::arrowedLine(new_image, center, cv::Point(center.x, center.y - 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
-      } else if (aprox_speed_y < -0.4) {
+      } else if (aprox_speed_y < -thresh_y) {
         cv::arrowedLine(new_image, center, cv::Point(center.x, center.y + 150), cv::Scalar(0, 0, 0), 10, 8, 0, 0.3);
       }
     }
@@ -408,9 +449,81 @@ const
     gettimeofday(&CVParams::last_time, nullptr);
     CVParams::old_3_gray = frame_gray.clone();
     CVParams::points_3_old = good_new;
+    
+    if (mode_ex3 == 3) {
+      float speed_avg = 0.0;
+      int speed_n = 0;
+      for (int i = 0; i < CVParams::points_3_recorded.size(); i++) {
+        speed_avg += CVParams::points_3_recorded[i].z;
+        speed_n++;
+      }
+      std::cout << "Avg speed: " << speed_avg/speed_n << std::endl;
+
+      try {
+        CVParams::camera2base = tf_buffer_->lookupTransform(
+          "head_front_camera_rgb_optical_frame",
+          "base_footprint", tf2::TimePoint());
+        CVParams::rotx = CVParams::camera2base.transform.rotation.x;
+        CVParams::roty = CVParams::camera2base.transform.rotation.y;
+        CVParams::rotz = CVParams::camera2base.transform.rotation.z;
+        CVParams::rotw = CVParams::camera2base.transform.rotation.w;
+      } catch (tf2::TransformException & ex) {
+      }
+
+      // Computing tvec and rvec
+      tf2::Quaternion q(CVParams::rotx, CVParams::roty, CVParams::rotz, CVParams::rotw);
+      tf2::Matrix3x3 tf_matrix(q);
+
+      cv::Mat rvec = cv::Mat(3, 3, CV_32FC1);
+
+      for (int i = 0; i < 3; i++) {
+          for (int j = 0; j < 3; j++) {
+              rvec.at<float>(i, j) = tf_matrix[i][j];
+          }
+      }
+
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr new_pcl (new pcl::PointCloud<pcl::PointXYZRGB>);
+      // Fill in the cloud data
+      new_pcl->width = CVParams::points_3_recorded.size();
+      new_pcl->height = 1;
+      new_pcl->is_dense = true;
+      new_pcl->points.resize(new_pcl->width * new_pcl->height);
+      cv::Point2f curr_pcl_point= cv::Point2f(0.0,0.0);
+      int pcl_points_index = 0;
+
+      pcl::PointCloud<pcl::PointXYZRGB>::iterator pt_iter = new_pcl->begin ();
+      for (int v = 0; v < (int)new_pcl->height; ++v) {
+        for (int u = 0; u < (int)new_pcl->width; ++u, ++pt_iter) {
+          pcl::PointXYZRGB& pt = *pt_iter;
+          curr_pcl_point.x += CVParams::points_3_recorded[pcl_points_index].x;
+          curr_pcl_point.y += CVParams::points_3_recorded[pcl_points_index].y;
+          cv::Mat cube_pos = (cv::Mat_<float>(3,1) << 0, curr_pcl_point.x, curr_pcl_point.y);
+          cv::Mat result = rvec * cube_pos;
+          pt.x = result.at<float>(0,0);
+          pt.y = result.at<float>(1,0);
+          pt.z = result.at<float>(2,0);
+          if (pcl_points_index  < 255) {
+            pt.r = 255;
+            pt.g = 0 + pcl_points_index;
+          } else if (pcl_points_index < 510) {
+            pt.r = 255 - pcl_points_index;
+            pt.g = 255;
+          } else if (pcl_points_index < 765) {
+            pt.g = 255 - pcl_points_index;
+            pt.b = 0 + pcl_points_index;
+          } else {
+            pt.b = 255;
+          }
+          pcl_points_index++;
+        }
+      }
+
+      out_pointcloud = *new_pcl;
+    }
 
     // Take first frame and find corners in it only if moved
-    if (std::abs(aprox_speed_x) > 0.3 || std::abs(aprox_speed_y) > 0.3) {
+    if (CVParams::distance_traveled > 1) {
+      CVParams::distance_traveled = 0;
       cv::cvtColor(in_image_rgb, CVParams::old_3_gray, cv::COLOR_BGR2GRAY);
       cv::goodFeaturesToTrack(CVParams::old_3_gray, CVParams::points_3_old, 100, 0.3, 7, cv::Mat(), 7, false, 0.04);
     }
