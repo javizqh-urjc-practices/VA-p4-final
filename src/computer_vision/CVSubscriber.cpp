@@ -48,6 +48,7 @@ inline bool is_depth_in_meters = false;
 
 struct timeval last_time {};
 
+std::vector<cv::Scalar> colors;
 cv::Ptr<cv::ml::KNearest> knn;
 
 cv::Scalar lower_hsv(100, 30, 210);
@@ -123,6 +124,12 @@ void initWindow(cv::Mat in_image_rgb)
   // create Trackbar and add to a window
   cv::createTrackbar(CVParams::MODE, CVParams::WINDOW_NAME, nullptr, 4, 0);
   cv::createTrackbar(CVParams::K, CVParams::WINDOW_NAME, nullptr, 4, 0);
+
+  // Generate unique colors
+  for (int i = 0; i < 6; i++) {
+      CVParams::colors.push_back(cv::Scalar(rand() % 256, rand() % 256, rand() % 256));
+  }
+
   cv::createTrackbar(CVParams::EX3MODES, CVParams::WINDOW_NAME, nullptr, 3, 0);
   gettimeofday(&CVParams::last_time, nullptr);
   // Take first frame and find corners in it
@@ -155,6 +162,7 @@ const
   out_pointcloud = in_pointcloud;
 
   // First time execution
+
   CVFunctions::initWindow(in_image_rgb);
   if (in_image_depth.type() == CV_32F) CVParams::is_depth_in_meters = true;
 
@@ -162,7 +170,14 @@ const
   std::vector<cv::Point2f> points;
   cv::Mat labels, data, centers;
   std::vector<float> radius;
-  // Obtaining Parameter
+  cv::Mat colored_boxes;
+
+  int label;
+
+  // Set a random seed
+  srand(5890);
+
+  // Obtaining Parameters
 
   int mode_param = cv::getTrackbarPos(CVParams::MODE, CVParams::WINDOW_NAME);
   int K = cv::getTrackbarPos(CVParams::K, CVParams::WINDOW_NAME) + 1;
@@ -546,11 +561,23 @@ const
 
     // Drawing
     for (int i = 0; i < K; i++) {
-        cv::circle(out_image_rgb, cv::Point(centers.at<cv::Point2f>(i, 0).x, centers.at<cv::Point2f>(i, 0).y),
+        cv::circle(in_image_rgb, cv::Point(centers.at<cv::Point2f>(i, 0).x, centers.at<cv::Point2f>(i, 0).y),
                    radius[i], cv::Scalar(0, 0, 255), 2);
-        cv::circle(out_image_rgb, cv::Point(centers.at<cv::Point2f>(i, 0).x, centers.at<cv::Point2f>(i, 0).y),
+        cv::circle(in_image_rgb, cv::Point(centers.at<cv::Point2f>(i, 0).x, centers.at<cv::Point2f>(i, 0).y),
                    3, cv::Scalar(0, 255, 0), -1); // Centroide en verde
     }
+
+    // Color each box in the filtered image
+    colored_boxes = cv::Mat::zeros(filtered_image.size(), CV_8UC3);
+    for (int i = 0; i < points.size(); i++) {
+
+        label = labels.at<int>(i, 0);
+        cv::Point pt = points[i];
+        colored_boxes.at<cv::Vec3b>(pt.y, pt.x) = cv::Vec3b(CVParams::colors[label][0], CVParams::colors[label][1], CVParams::colors[label][2]);
+    }
+    cv::addWeighted(in_image_rgb, 0.5, colored_boxes, 0.5, 0.0, out_image_rgb);
+
+    // Display image
     cv::imshow(CVParams::WINDOW_NAME, out_image_rgb);
     break;  
 
