@@ -405,7 +405,6 @@ const
     float thresh_x = 0.3;
     float thresh_y = 0.3;
 
-    // TODO: clean this mess
     cv::Point2f center = cv::Point2f(in_image_rgb.cols/2,in_image_rgb.rows/2);
     if (aprox_speed_x > thresh_x) {
       if (aprox_speed_y > thresh_y) {
